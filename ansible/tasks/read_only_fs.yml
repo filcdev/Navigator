@@ -79,6 +79,7 @@
     regexp: '^([^#\s]+\s+/\s+[^#\s]+\s+)([^#\s]+)(\s+[^#\s]+\s+[^#\s]+\s*)$'
     replace: '\1\2,ro\3'
   when: root_opts.stdout != "" and "ro" not in root_opts.stdout.split(",")
+  register: fstab_ro
 
 - name: Check if GRUB is present
   ansible.builtin.stat:
@@ -101,18 +102,25 @@
     - grub_cmdline.stdout != ""
     - '"ro" not in grub_cmdline.stdout.split()'
   notify: Update grub
+  register: grub_ro
 
-- name: Remount root read-only now (best effort; reboot below is authoritative)
+- name: Track whether read-only root was just applied
+  ansible.builtin.set_fact:
+    ro_just_applied: "{{ (fstab_ro.changed | default(false)) or (grub_ro.changed | default(false)) }}"
+
+- name: Remount root read-only now (best effort; reboot only when first applying)
   ansible.builtin.command: mount -o remount,ro /
   changed_when: false
   failed_when: false
 
-- name: Reboot to settle read-only root
+- name: Reboot to settle read-only root (only when first applying)
   ansible.builtin.reboot:
     reboot_timeout: 300
+  when: ro_just_applied | bool
 
 - name: Verify root is read-only after reboot
   ansible.builtin.command: findmnt -no OPTIONS /
   register: ro_verify
   changed_when: false
   failed_when: "'ro' not in ro_verify.stdout.split(',')"
+  when: ro_just_applied | bool
