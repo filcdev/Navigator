@@ -1,0 +1,8 @@
+{
+    "auto_install": [
+        {
+            "image": "/debian-netinst.iso",
+            "template": "/ventoy/script/preseed.cfg"
+        }
+    ]
+}
