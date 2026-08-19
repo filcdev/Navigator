@@ -1,0 +1,38 @@
+# vars.yml — public (non-secret) playbook variables.
+# Secrets (e.g. backend_ca_cert) belong in group_vars/all/secrets.yml, which is gitignored.
+
+kiosk_user: kiosk
+kiosk_user_shell: /bin/bash
+kiosk_binary: /usr/bin/petrik-navigator
+autologin_tty: tty1
+
+# GitHub release source (Tauri updater's latest.json lives here)
+github_repo: filcdev/Navigator
+deb_download_dest: "/tmp/navigator_latest.deb"
+
+# Backend the kiosk talks to. External URL, configurable per site.
+# Testing: backend runs in Docker (navigator-main) on this host, port 8001.
+backend_url: "http://10.0.1.127:8001"
+# Whether the backend's TLS certificate is publicly trusted.
+#   true  -> nothing extra needed
+#   false -> self-signed; the playbook installs backend_ca_cert into the system trust store
+backend_trust_ssl: true
+# PEM content of the self-signed CA (only used when backend_trust_ssl is false).
+# Populated from group_vars/all/secrets.yml.
+backend_ca_cert: ""
+
+# Read-only root filesystem (safe hard power-off).
+# Transient writes are redirected to tmpfs (RAM) and discarded on reboot.
+# /var/lib/dpkg and /var/lib/apt intentionally stay on the read-only root so
+# package state survives reboots (clean upgrades).
+ro_enable: true
+ro_tmpfs_mounts:
+  - { path: /tmp, size: "128M", mode: "1777" }
+  - { path: /var/log, size: "64M", mode: "0755" }
+  - { path: /var/tmp, size: "64M", mode: "1777" }
+  - { path: /var/cache, size: "64M", mode: "0755" }
+  - { path: /var/lib/systemd, size: "32M", mode: "0755" }
+  - { path: /var/lib/sudo, size: "8M", mode: "0700" }
+  - { path: /var/lib/NetworkManager, size: "16M", mode: "0755" }
+  - { path: /var/lib/dhcp, size: "16M", mode: "0755" }
+ro_xdg_base: "/tmp/navigator"

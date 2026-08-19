@@ -1,0 +1,40 @@
+# tasks/autologin.yml
+- name: Create getty override directory
+  ansible.builtin.file:
+    path: "/etc/systemd/system/getty@{{ autologin_tty }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write autologin override for getty
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/getty@{{ autologin_tty }}.service.d/autologin.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart=-/sbin/agetty --autologin {{ kiosk_user }} --noclear %I $TERM
+  notify: Reload systemd
+
+- name: Write .bash_profile to launch cage session on TTY1 login
+  ansible.builtin.copy:
+    dest: "/home/{{ kiosk_user }}/.bash_profile"
+    owner: "{{ kiosk_user }}"
+    group: "{{ kiosk_user }}"
+    mode: "0644"
+    content: |
+      # Source .bashrc if it exists
+      [[ -f ~/.bashrc ]] && . ~/.bashrc
+
+      # Redirect app cache/state to tmpfs so the read-only root never gets written
+      export XDG_CACHE_HOME={{ ro_xdg_base }}/cache
+      export XDG_DATA_HOME={{ ro_xdg_base }}/data
+      export XDG_STATE_HOME={{ ro_xdg_base }}/state
+
+      # Launch kiosk only on TTY1, not over SSH or other TTYs
+      if [ "$(tty)" = "/dev/{{ autologin_tty }}" ]; then
+        exec cage -- {{ kiosk_binary }}
+      fi

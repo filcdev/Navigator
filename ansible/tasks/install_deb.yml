@@ -1,0 +1,25 @@
+# tasks/install_deb.yml
+- name: Install navigator .deb package
+  ansible.builtin.apt:
+    deb: "{{ deb_download_dest }}"
+    state: present
+
+- name: Fix any broken dependencies after deb install
+  ansible.builtin.apt:
+    state: fixed
+  changed_when: false
+
+- name: Verify kiosk binary exists after install
+  ansible.builtin.stat:
+    path: "{{ kiosk_binary }}"
+  register: binary_stat
+
+- name: Fail if binary not found
+  ansible.builtin.fail:
+    msg: "{{ kiosk_binary }} was not found after package install — check the .deb contents."
+  when: not binary_stat.stat.exists
+
+- name: Remove downloaded .deb file
+  ansible.builtin.file:
+    path: "{{ deb_download_dest }}"
+    state: absent
