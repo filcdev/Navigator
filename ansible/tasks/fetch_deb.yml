@@ -1,0 +1,29 @@
+# tasks/fetch_deb.yml
+- name: Fetch latest.json from GitHub releases
+  ansible.builtin.uri:
+    url: "https://github.com/{{ github_repo }}/releases/latest/download/latest.json"
+    method: GET
+    return_content: true
+  register: gh_latest
+  retries: 3
+  delay: 5
+
+- name: Parse latest.json content
+  ansible.builtin.set_fact:
+    latest_release: "{{ gh_latest.content | from_json }}"
+
+- name: Extract .deb URL and version
+  ansible.builtin.set_fact:
+    deb_url: "{{ latest_release.platforms['linux-x86_64-deb'].url }}"
+    deb_version: "{{ latest_release.version }}"
+
+- name: Show resolved .deb URL and version
+  ansible.builtin.debug:
+    msg: "Downloading navigator v{{ deb_version }} from {{ deb_url }}"
+
+- name: Download latest navigator .deb
+  ansible.builtin.get_url:
+    url: "{{ deb_url }}"
+    dest: "{{ deb_download_dest }}"
+    mode: "0644"
+    force: true            # always re-download so upgrades work

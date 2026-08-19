@@ -1,0 +1,11 @@
+# SSH keys (referenced externally; never commit)
+.ssh/
+
+# Ansible Vault / secrets
+group_vars/*/secrets.yml
+secrets.yml
+.vault_pass
+vault_pass.txt
+
+# Runtime artifacts
+*.retry

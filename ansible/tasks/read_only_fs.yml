@@ -1,0 +1,117 @@
+# tasks/read_only_fs.yml
+# Makes the root filesystem read-only so a hard power cut is safe.
+#
+# Why this is more robust than the previous attempt:
+#   - root "ro" is applied by editing the EXISTING fstab line (not creating a
+#     duplicate / entry) AND by pinning it in the GRUB kernel command line.
+#   - writable runtime state is redirected to tmpfs for every dir that actually
+#     needs writes (/var/lib/systemd, /var/lib/sudo, NetworkManager, dhcp, ...),
+#     not just /tmp,/var/log,/var/tmp.
+#   - dpkg/apt state stays on the read-only root so upgrades keep working.
+#   - the kiosk user's XDG dirs are created on tmpfs via tmpfiles.d.
+#   - the remount is verified before rebooting.
+
+- name: Ensure /etc/machine-id exists (static, survives read-only root)
+  ansible.builtin.command: systemd-machine-id-setup
+  args:
+    creates: /etc/machine-id
+
+- name: Create journald volatile storage drop-in
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Set journald to volatile (RAM-only) logging
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/10-kiosk-ro.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Journal]
+      Storage=volatile
+      RuntimeMaxUse=32M
+
+- name: Ensure tmpfs mountpoints exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop: "{{ ro_tmpfs_mounts }}"
+
+- name: Mount tmpfs for writable directories (writes fstab + mounts now)
+  ansible.builtin.mount:
+    path: "{{ item.path }}"
+    src: tmpfs
+    fstype: tmpfs
+    opts: "size={{ item.size }},mode={{ item.mode }},noatime"
+    state: mounted
+  loop: "{{ ro_tmpfs_mounts }}"
+
+- name: Create tmpfiles.d entry for kiosk XDG dirs on tmpfs
+  ansible.builtin.copy:
+    dest: /etc/tmpfiles.d/navigator-kiosk.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      d {{ ro_xdg_base }} 0755 {{ kiosk_user }} {{ kiosk_user }} -
+      d {{ ro_xdg_base }}/cache 0755 {{ kiosk_user }} {{ kiosk_user }} -
+      d {{ ro_xdg_base }}/data 0755 {{ kiosk_user }} {{ kiosk_user }} -
+      d {{ ro_xdg_base }}/state 0755 {{ kiosk_user }} {{ kiosk_user }} -
+
+# ----------------------------------------------------------------------------
+# Root filesystem -> read-only
+# ----------------------------------------------------------------------------
+- name: Read current root mount options
+  ansible.builtin.shell: "awk '$2 == \"/\" {print $4}' /etc/fstab"
+  register: root_opts
+  changed_when: false
+
+- name: Add ro to root mount options in fstab
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#\s]+\s+/\s+[^#\s]+\s+)([^#\s]+)(\s+[^#\s]+\s+[^#\s]+\s*)$'
+    replace: '\1\2,ro\3'
+  when: root_opts.stdout != "" and "ro" not in root_opts.stdout.split(",")
+
+- name: Check if GRUB is present
+  ansible.builtin.stat:
+    path: /etc/default/grub
+  register: grub_cfg
+
+- name: Read GRUB kernel command line
+  ansible.builtin.shell: "grep -oP '^GRUB_CMDLINE_LINUX_DEFAULT=\"\\K[^\"]+' /etc/default/grub"
+  register: grub_cmdline
+  changed_when: false
+  when: grub_cfg.stat.exists
+
+- name: Add ro to GRUB kernel command line
+  ansible.builtin.replace:
+    path: /etc/default/grub
+    regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT="[^"]*)"'
+    replace: '\1 ro"'
+  when:
+    - grub_cfg.stat.exists
+    - grub_cmdline.stdout != ""
+    - '"ro" not in grub_cmdline.stdout.split()'
+  notify: Update grub
+
+- name: Remount root read-only now
+  ansible.builtin.command: mount -o remount,ro /
+  changed_when: false
+
+- name: Verify root is read-only
+  ansible.builtin.command: findmnt -no OPTIONS /
+  register: ro_verify
+  changed_when: false
+  failed_when: "ro not in ro_verify.stdout.split(',')"
+
+- name: Reboot to settle read-only root
+  ansible.builtin.reboot:
+    reboot_timeout: 300

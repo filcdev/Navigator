@@ -1,0 +1,13 @@
+# tasks/packages.yml
+# cage runs the app fullscreen; the .deb pulls in its own webkit2gtk/GTK runtime deps.
+- name: Install required packages
+  ansible.builtin.apt:
+    name:
+      - cage               # minimal Wayland kiosk compositor
+      - xwayland           # needed by some X11 apps inside Wayland
+      - curl
+      - jq
+      - libinput-tools
+      - udev
+    state: present
+    update_cache: true

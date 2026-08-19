@@ -1,0 +1,72 @@
+---
+# ==============================================================================
+# Kiosk Setup Playbook (single call file)
+# ==============================================================================
+# Sets up:
+#   - kiosk user + SSH key auth
+#   - SSH hardening
+#   - cage Wayland compositor as a kiosk session
+#   - Latest Navigator .deb from GitHub releases running fullscreen
+#   - Runtime backend config (/etc/navigator/backend.json)
+#   - Read-only root filesystem (safe hard power-off)
+#
+# Usage (run from the repo ROOT so the relative SSH key path resolves):
+#   ansible-playbook -i ansible/inventory.ini ansible/site.yml
+#
+# Override variables with --extra-vars, e.g.:
+#   --extra-vars "backend_url='https://api.example.com' backend_trust_ssl=false"
+# ==============================================================================
+
+- name: Kiosk machine setup
+  hosts: kiosk
+  become: true
+  vars_files:
+    - vars.yml
+  tasks:
+    - name: "00. Load secrets (real file or example fallback)"
+      ansible.builtin.include_vars:
+        file: "{{ item }}"
+      with_first_found:
+        - "{{ playbook_dir }}/group_vars/all/secrets.yml"
+        - "{{ playbook_dir }}/group_vars/all/secrets.yml.example"
+
+    - name: "00. Remount root read-write for provisioning"
+      ansible.builtin.command: mount -o remount,rw /
+      changed_when: false
+      when: ro_enable | bool
+
+    - name: "01. Create kiosk user"
+      import_tasks: tasks/admin_user.yml
+    - name: "02. SSH hardening"
+      import_tasks: tasks/ssh_hardening.yml
+    - name: "03. Install packages"
+      import_tasks: tasks/packages.yml
+    - name: "04. Configure autologin"
+      import_tasks: tasks/autologin.yml
+    - name: "05. Fetch deb package"
+      import_tasks: tasks/fetch_deb.yml
+    - name: "06. Install deb package"
+      import_tasks: tasks/install_deb.yml
+    - name: "07. Configure backend"
+      import_tasks: tasks/configure_backend.yml
+    - name: "08. Setup user service"
+      import_tasks: tasks/user_service.yml
+    - name: "09. Enable read-only root"
+      import_tasks: tasks/read_only_fs.yml
+      when: ro_enable | bool
+
+  handlers:
+    - name: Restart sshd
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Update CA certificates
+      ansible.builtin.command: update-ca-certificates
+
+    - name: Update grub
+      ansible.builtin.command: update-grub

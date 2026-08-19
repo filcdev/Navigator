@@ -1,0 +1,45 @@
+# tasks/admin_user.yml
+# Dedicated kiosk user with access to the display/input groups needed by cage.
+- name: Gather group info
+  ansible.builtin.getent:
+    database: group
+
+- name: Create kiosk user
+  ansible.builtin.user:
+    name: "{{ kiosk_user }}"
+    shell: "{{ kiosk_user_shell }}"
+    groups: video,input,sudo
+    append: true
+    create_home: true
+    state: present
+
+- name: Add kiosk user to render group (if present)
+  ansible.builtin.user:
+    name: "{{ kiosk_user }}"
+    groups: render
+    append: true
+  when: "'render' in ansible_facts.getent_group"
+
+- name: Allow kiosk passwordless sudo
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ kiosk_user }}"
+    content: "{{ kiosk_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+
+- name: Ensure .ssh directory exists for kiosk
+  ansible.builtin.file:
+    path: "/home/{{ kiosk_user }}/.ssh"
+    state: directory
+    owner: "{{ kiosk_user }}"
+    group: "{{ kiosk_user }}"
+    mode: "0700"
+
+- name: Install authorised SSH public key
+  ansible.builtin.authorized_key:
+    user: "{{ kiosk_user }}"
+    key: "{{ ssh_public_key }}"
+    state: present
+    exclusive: false

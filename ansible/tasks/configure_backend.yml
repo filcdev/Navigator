@@ -1,0 +1,31 @@
+# tasks/configure_backend.yml
+# Writes the backend config the app reads at startup (via the get_backend_config command).
+- name: Ensure navigator config directory exists
+  ansible.builtin.file:
+    path: /etc/navigator
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write backend config
+  ansible.builtin.copy:
+    dest: /etc/navigator/backend.json
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      {
+        "backend_url": "{{ backend_url }}",
+        "trust_ssl": {{ backend_trust_ssl | bool | lower }}
+      }
+
+- name: Install self-signed backend CA into system trust store
+  ansible.builtin.copy:
+    content: "{{ backend_ca_cert }}"
+    dest: /usr/local/share/ca-certificates/navigator-ca.crt
+    owner: root
+    group: root
+    mode: "0644"
+  when: not (backend_trust_ssl | bool) and backend_ca_cert is defined and backend_ca_cert | length > 0
+  notify: Update CA certificates

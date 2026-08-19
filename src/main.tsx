@@ -14,9 +14,13 @@ import { ThemeProvider } from './contexts/other/ThemeContext.tsx'
 import { GraphProvider } from './contexts/other/GraphContext.tsx'
 import { LanguageProvider } from './contexts/other/LanguageContext.tsx'
 import { TranslationsProvider } from './contexts/other/TranslationsContext.tsx'
+import { initBackend } from './api/requests'
 import './i18n/i18n.ts'
 
-createRoot(document.getElementById('root')!).render(
+async function bootstrap() {
+  await initBackend()
+
+  createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <GraphProvider>
       <ThemeProvider>
@@ -42,6 +46,9 @@ createRoot(document.getElementById('root')!).render(
           </BrowserRouter>
         </LanguageProvider>
       </ThemeProvider>
-    </GraphProvider>
-  </StrictMode >
-)
+      </GraphProvider>
+    </StrictMode >
+  )
+}
+
+bootstrap()
