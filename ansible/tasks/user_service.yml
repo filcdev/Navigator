@@ -1,5 +1,8 @@
 # tasks/user_service.yml
-# systemd --user service as a more robust alternative to the .bash_profile launch.
+# Optional systemd --user service. The kiosk is launched via .bash_profile
+# (autologin -> cage) as the primary mechanism, so this service is kept DISABLED
+# to avoid running two cage instances. Enable it if you switch away from the
+# .bash_profile launcher.
 - name: Create systemd user service directory for kiosk
   ansible.builtin.file:
     path: "/home/{{ kiosk_user }}/.config/systemd/user"
@@ -32,21 +35,17 @@
       [Install]
       WantedBy=default.target
 
-- name: Enable lingering for kiosk (keeps user services alive)
-  ansible.builtin.command: loginctl enable-linger {{ kiosk_user }}
-  args:
-    creates: "/var/lib/systemd/linger/{{ kiosk_user }}"
-
 - name: Get kiosk user ID
   ansible.builtin.getent:
     database: passwd
     key: "{{ kiosk_user }}"
   register: getent_passwd
 
-- name: Enable navigator-kiosk user service
+- name: Ensure navigator-kiosk user service is disabled (avoid double launch)
   ansible.builtin.systemd:
     name: navigator-kiosk.service
-    enabled: true
+    enabled: false
+    state: stopped
     scope: user
   become: true
   become_user: "{{ kiosk_user }}"

@@ -23,14 +23,14 @@ backend_ca_cert: ""
 
 # Read-only root filesystem (safe hard power-off).
 # Transient writes are redirected to tmpfs (RAM) and discarded on reboot.
-# /var/lib/dpkg and /var/lib/apt intentionally stay on the read-only root so
-# package state survives reboots (clean upgrades).
+# /var/lib/dpkg, /var/lib/apt and /var/cache intentionally stay on the read-only
+# root: apt needs them (and lots of space) during provisioning, and their state
+# must survive reboots for clean upgrades.
 ro_enable: true
 ro_tmpfs_mounts:
   - { path: /tmp, size: "128M", mode: "1777" }
   - { path: /var/log, size: "64M", mode: "0755" }
   - { path: /var/tmp, size: "64M", mode: "1777" }
-  - { path: /var/cache, size: "64M", mode: "0755" }
   - { path: /var/lib/systemd, size: "32M", mode: "0755" }
   - { path: /var/lib/sudo, size: "8M", mode: "0700" }
   - { path: /var/lib/NetworkManager, size: "16M", mode: "0755" }

@@ -102,16 +102,17 @@
     - '"ro" not in grub_cmdline.stdout.split()'
   notify: Update grub
 
-- name: Remount root read-only now
+- name: Remount root read-only now (best effort; reboot below is authoritative)
   ansible.builtin.command: mount -o remount,ro /
   changed_when: false
-
-- name: Verify root is read-only
-  ansible.builtin.command: findmnt -no OPTIONS /
-  register: ro_verify
-  changed_when: false
-  failed_when: "ro not in ro_verify.stdout.split(',')"
+  failed_when: false
 
 - name: Reboot to settle read-only root
   ansible.builtin.reboot:
     reboot_timeout: 300
+
+- name: Verify root is read-only after reboot
+  ansible.builtin.command: findmnt -no OPTIONS /
+  register: ro_verify
+  changed_when: false
+  failed_when: "'ro' not in ro_verify.stdout.split(',')"
