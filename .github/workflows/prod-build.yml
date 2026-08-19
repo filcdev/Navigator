@@ -1,12 +1,37 @@
-name: 'publish'
+name: 'draft'
 
 on:
     push:
-        tags:
-            - 'v*'
+        branches:
+            - main
+    workflow_dispatch:
 
 jobs:
+    create-draft:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        outputs:
+            release_id: ${{ steps.draft.outputs.release_id }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Reset draft release
+              id: draft
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                TAG="draft"
+                gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+                gh release create "$TAG" \
+                  --target "$GITHUB_SHA" \
+                  --draft \
+                  --title "Draft (main)" \
+                  --notes "Auto-generated draft; overwritten on each push to main."
+                echo "release_id=$(gh release view "$TAG" --json id -q .id)" >> "$GITHUB_OUTPUT"
+
     publish-tauri:
+        needs: create-draft
         permissions:
             contents: write
         strategy:
@@ -58,7 +83,7 @@ jobs:
             - name: get environment variables into .env
               run: echo VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }} > .env
 
-            - name: Build Tauri app
+            - name: Build and publish Tauri app
               uses: tauri-apps/tauri-action@v0
               env:
                   CI: true
@@ -66,7 +91,8 @@ jobs:
                   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
                   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
               with:
-                  tagName: ${{ github.ref_name }}
-                  releaseName: ${{ github.ref_name }}
-                  releaseDraft: false
+                  tagName: draft
+                  releaseName: draft
+                  releaseId: ${{ needs.create-draft.outputs.release_id }}
+                  releaseDraft: true
                   prerelease: false
