@@ -36,5 +36,12 @@
 
       # Launch kiosk only on TTY1, not over SSH or other TTYs
       if [ "$(tty)" = "/dev/{{ autologin_tty }}" ]; then
+        # Wait for the network (DHCP lease + default route) before launching.
+        # The app fetches the backend on startup; starting before the network is
+        # up makes it fail with "Network is unreachable" and show a blank screen.
+        for i in $(seq 1 60); do
+          ip route show default >/dev/null 2>&1 && break
+          sleep 1
+        done
         exec cage -- {{ kiosk_binary }}
       fi
