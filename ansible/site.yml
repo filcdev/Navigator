@@ -41,7 +41,7 @@
       import_tasks: tasks/ssh_hardening.yml
     - name: "03. Install packages"
       import_tasks: tasks/packages.yml
-    - name: "04. Configure autologin"
+    - name: "04. Configure cage systemd session"
       import_tasks: tasks/autologin.yml
     - name: "05. Fetch deb package"
       import_tasks: tasks/fetch_deb.yml
@@ -49,9 +49,7 @@
       import_tasks: tasks/install_deb.yml
     - name: "07. Configure backend"
       import_tasks: tasks/configure_backend.yml
-    - name: "08. Setup user service"
-      import_tasks: tasks/user_service.yml
-    - name: "09. Enable read-only root"
+    - name: "08. Enable read-only root"
       import_tasks: tasks/read_only_fs.yml
       when: ro_enable | bool
 
